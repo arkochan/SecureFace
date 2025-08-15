@@ -5,6 +5,7 @@ import queue
 import os
 import shutil
 from retinaface import RetinaFace
+from embedder import embedder  # Import the global embedder instance
 
 class FrameProcessor:
     def __init__(self):
@@ -17,6 +18,17 @@ class FrameProcessor:
         self.frame_queue = queue.Queue(maxsize=1)  # Only keep the latest frame
         self.saved_face_count = 0
         
+        # Face detection and cropping parameters
+        self.face_rect_color = (0, 255, 0)  # Green rectangle
+        self.face_rect_thickness = 2
+        self.face_margin_ratio = 0.1  # 10% margin around face
+        self.landmark_radius = 2
+        self.landmark_color = (0, 0, 255)  # Red landmarks
+        self.landmark_thickness = -1  # Filled circle
+        
+        # Processing parameters
+        self.send_full_frame = False  # Whether to send full frame instead of cropped faces
+        
         # Initialize RetinaFace model
         # The model will be automatically downloaded on first use
         print("Initializing RetinaFace model...")
@@ -25,16 +37,6 @@ class FrameProcessor:
         if dummy_frame is None:
             dummy_frame = cv2.imread("/tmp/nonexistent.jpg", cv2.IMREAD_COLOR)
         print("RetinaFace model initialized.")
-        
-        # Set up directory for cropped face images
-        self.cropped_images_dir = "cropped_images"
-        self._setup_cropped_images_dir()
-
-    def _setup_cropped_images_dir(self):
-        """Clean up and create the cropped images directory"""
-        if os.path.exists(self.cropped_images_dir):
-            shutil.rmtree(self.cropped_images_dir)
-        os.makedirs(self.cropped_images_dir)
 
     def start(self):
         self.stopped = False
@@ -76,8 +78,25 @@ class FrameProcessor:
                 self.frame_count += 1
 
     def _detect_faces(self, frame):
-        """Detect faces using RetinaFace, draw green rectangles around them, and save cropped faces"""
+        """Detect faces using RetinaFace, draw green rectangles around them, and process cropped faces with embedder"""
         try:
+            # If send_full_frame is enabled, send the entire frame to the embedder
+            if self.send_full_frame:
+                embedder.embed_direct(frame)
+                # Create a copy of the frame to draw on
+                annotated_frame = frame.copy()
+                # Add text indicating full frame mode
+                cv2.putText(annotated_frame, "Full Frame Mode", (10, 30), 
+                           cv2.FONT_HERSHEY_SIMPLEX, 1, self.face_rect_color, 2)
+                
+                # Resize to a standard size while maintaining aspect ratio
+                target_height = 480
+                aspect_ratio = annotated_frame.shape[1] / annotated_frame.shape[0]
+                target_width = int(target_height * aspect_ratio)
+                
+                resized_frame = cv2.resize(annotated_frame, (target_width, target_height))
+                return resized_frame
+            
             # Create a copy of the frame to draw on
             annotated_frame = frame.copy()
             
@@ -86,29 +105,31 @@ class FrameProcessor:
             rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             faces = RetinaFace.detect_faces(rgb_frame)
             
-            # Draw rectangles around all detected faces and save cropped faces
+            # Draw rectangles around all detected faces and process cropped faces
             face_count = 0
             if isinstance(faces, dict):
                 for face_key, face_data in faces.items():
                     # Get bounding box coordinates
                     x1, y1, x2, y2 = map(int, face_data["facial_area"])
                     
-                    # Draw green rectangle around the face
-                    cv2.rectangle(annotated_frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
+                    # Draw rectangle around the face with configurable parameters
+                    cv2.rectangle(annotated_frame, (x1, y1), (x2, y2), 
+                                 self.face_rect_color, self.face_rect_thickness)
                     face_count += 1
                     
-                    # Draw facial landmarks if available
+                    # Draw facial landmarks if available with configurable parameters
                     if "landmarks" in face_data:
                         for landmark_key, landmark in face_data["landmarks"].items():
                             lx, ly = map(int, landmark)
-                            cv2.circle(annotated_frame, (lx, ly), 2, (0, 0, 255), -1)
+                            cv2.circle(annotated_frame, (lx, ly), self.landmark_radius, 
+                                      self.landmark_color, self.landmark_thickness)
                     
-                    # Crop and save the face
-                    self._save_cropped_face(frame, x1, y1, x2, y2)
+                    # Crop and process the face with embedder
+                    self._process_cropped_face(frame, x1, y1, x2, y2)
             
             # Add face count text
             cv2.putText(annotated_frame, f"Faces detected: {face_count}", (10, 30), 
-                       cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+                       cv2.FONT_HERSHEY_SIMPLEX, 1, self.face_rect_color, 2)
             
             # Resize to a standard size while maintaining aspect ratio
             target_height = 480
@@ -124,14 +145,14 @@ class FrameProcessor:
             # Return original frame resized to standard size
             return cv2.resize(frame, (640, 480))
 
-    def _save_cropped_face(self, frame, x1, y1, x2, y2):
-        """Save a cropped face image to the cropped_images directory"""
+    def _process_cropped_face(self, frame, x1, y1, x2, y2):
+        """Process a cropped face image with the embedder"""
         try:
-            # Add margin around the face (10% of face size)
+            # Add margin around the face using configurable parameter
             width = x2 - x1
             height = y2 - y1
-            margin_x = int(width * 0.1)
-            margin_y = int(height * 0.1)
+            margin_x = int(width * self.face_margin_ratio)
+            margin_y = int(height * self.face_margin_ratio)
             
             # Ensure coordinates are within frame bounds
             x1 = max(0, x1 - margin_x)
@@ -142,13 +163,65 @@ class FrameProcessor:
             # Crop the face region
             cropped_face = frame[y1:y2, x1:x2]
             
-            # Save the cropped face
-            filename = f"face_{self.saved_face_count:06d}.jpg"
-            filepath = os.path.join(self.cropped_images_dir, filename)
-            cv2.imwrite(filepath, cropped_face)
+            # Check if cropped face is valid
+            if cropped_face.size == 0:
+                print("❌ Error: Cropped face is empty")
+                return
+                
+            # Send the cropped face to the embedder for processing
+            embedder.embed(cropped_face)
             self.saved_face_count += 1
+            
+            # Get the embedding result (non-blocking)
+            embedding = embedder.get_embedding_result(timeout=0.01)
+            if embedding is not None:
+                print(f"✅ Generated embedding with shape: {embedding.shape}")
         except Exception as e:
-            print(f"Error saving cropped face: {e}")
+            print(f"Error processing cropped face: {e}")
+
+    def set_face_rect_color(self, color):
+        """Set the color of the face detection rectangle"""
+        self.face_rect_color = color
+
+    def set_face_rect_thickness(self, thickness):
+        """Set the thickness of the face detection rectangle"""
+        self.face_rect_thickness = thickness
+
+    def set_face_margin_ratio(self, ratio):
+        """Set the margin ratio around the detected face for cropping"""
+        self.face_margin_ratio = ratio
+
+    def set_landmark_radius(self, radius):
+        """Set the radius of the facial landmark circles"""
+        self.landmark_radius = radius
+
+    def set_landmark_color(self, color):
+        """Set the color of the facial landmark circles"""
+        self.landmark_color = color
+
+    def set_send_full_frame(self, enabled):
+        """Set whether to send full frame instead of cropped faces"""
+        self.send_full_frame = enabled
+
+    def get_current_params(self):
+        """Get the current face detection and cropping parameters"""
+        return {
+            'face_rect_color': self.face_rect_color,
+            'face_rect_thickness': self.face_rect_thickness,
+            'face_margin_ratio': self.face_margin_ratio,
+            'landmark_radius': self.landmark_radius,
+            'landmark_color': self.landmark_color,
+            'send_full_frame': self.send_full_frame
+        }
+
+    def reset_params_to_default(self):
+        """Reset all face detection and cropping parameters to their default values"""
+        self.face_rect_color = (0, 255, 0)  # Green rectangle
+        self.face_rect_thickness = 2
+        self.face_margin_ratio = 0.1  # 10% margin around face
+        self.landmark_radius = 2
+        self.landmark_color = (0, 0, 255)  # Red landmarks
+        self.landmark_thickness = -1  # Filled circle
 
     def process_frame(self, frame):
         """Update the current frame to be processed"""

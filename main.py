@@ -5,6 +5,7 @@ import threading
 from stream import VideoStream
 from frame_processor import FrameProcessor
 from ui_controller import UIController
+from embedder import embedder  # Import the global embedder instance
 import numpy as np
 
 def main():
@@ -54,6 +55,55 @@ def main():
                         # Only update processing if it's not globally disabled
                         if processing_enabled:
                             processor.toggle_processing(processing_active)
+                    
+                    # Handle face detection parameters
+                    if 'face_margin_ratio' in config:
+                        try:
+                            processor.set_face_margin_ratio(config['face_margin_ratio'])
+                        except Exception as e:
+                            print(f"Warning: Could not set face margin ratio: {e}")
+                    
+                    if 'face_rect_thickness' in config:
+                        try:
+                            processor.set_face_rect_thickness(config['face_rect_thickness'])
+                        except Exception as e:
+                            print(f"Warning: Could not set face rect thickness: {e}")
+                        
+                    if 'landmark_radius' in config:
+                        try:
+                            processor.set_landmark_radius(config['landmark_radius'])
+                        except Exception as e:
+                            print(f"Warning: Could not set landmark radius: {e}")
+                    
+                    # Handle processing mode
+                    if 'processing_mode' in config:
+                        try:
+                            if config['processing_mode'] == 'fullframe':
+                                processor.set_send_full_frame(True)
+                                # For full frame mode, we want to skip face detection in the embedder
+                                embedder.set_expect_aligned_face(False)
+                            else:
+                                processor.set_send_full_frame(False)
+                                # For aligned mode, we skip face detection in the embedder
+                                if config['processing_mode'] == 'aligned':
+                                    embedder.set_expect_aligned_face(True)
+                                else:
+                                    embedder.set_expect_aligned_face(False)
+                        except Exception as e:
+                            print(f"Warning: Could not set processing mode: {e}")
+                    
+                    # Handle preprocessing parameters
+                    if 'convert_to_rgb' in config:
+                        try:
+                            embedder.set_convert_to_rgb(config['convert_to_rgb'])
+                        except Exception as e:
+                            print(f"Warning: Could not set convert to RGB: {e}")
+                        
+                    if 'target_width' in config and 'target_height' in config:
+                        try:
+                            embedder.set_target_size(config['target_width'], config['target_height'])
+                        except Exception as e:
+                            print(f"Warning: Could not set target size: {e}")
                     
                     # If camera settings changed, restart stream
                     if (config['camera_source'] != stream.src or 

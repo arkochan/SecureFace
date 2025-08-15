@@ -39,7 +39,7 @@ class UIController:
         """Create and run the Tkinter UI"""
         self.root = tk.Tk()
         self.root.title("SecureFace Control Panel")
-        self.root.geometry("400x350")
+        self.root.geometry("400x600")  # Adjusted height
         self.root.protocol("WM_DELETE_WINDOW", self._on_closing)
         
         # Initialize UI variables after root is created
@@ -48,6 +48,17 @@ class UIController:
         self.height = tk.StringVar(value="480")
         self.fps = tk.StringVar(value="60")
         self.processing_enabled = tk.BooleanVar(value=True)
+        
+        # Face detection parameters
+        self.face_margin_ratio = tk.StringVar(value="0.1")
+        self.face_rect_thickness = tk.StringVar(value="2")
+        self.landmark_radius = tk.StringVar(value="2")
+        
+        # Preprocessing parameters
+        self.convert_to_rgb = tk.BooleanVar(value=True)
+        self.processing_mode = tk.StringVar(value="normal")  # normal, aligned, fullframe
+        self.target_width = tk.StringVar(value="112")
+        self.target_height = tk.StringVar(value="112")
         
         # Main frame
         main_frame = ttk.Frame(self.root)
@@ -97,6 +108,65 @@ class UIController:
         
         # Processing toggle
         ttk.Checkbutton(processing_frame, text="Enable Processing", variable=self.processing_enabled).pack(anchor=tk.W, pady=5)
+        
+        # Face detection settings section
+        face_label = ttk.Label(main_frame, text="Face Detection Settings", font=("Arial", 10, "bold"))
+        face_label.pack(anchor=tk.W, pady=(0, 5))
+        
+        face_frame = ttk.LabelFrame(main_frame, text="Face Detection Configuration")
+        face_frame.pack(fill=tk.X, pady=(0, 10))
+        
+        # Face margin ratio
+        margin_frame = ttk.Frame(face_frame)
+        margin_frame.pack(fill=tk.X, pady=5)
+        ttk.Label(margin_frame, text="Face Margin Ratio:").pack(side=tk.LEFT)
+        ttk.Entry(margin_frame, textvariable=self.face_margin_ratio, width=8).pack(side=tk.RIGHT)
+        
+        # Rectangle thickness
+        rect_frame = ttk.Frame(face_frame)
+        rect_frame.pack(fill=tk.X, pady=5)
+        ttk.Label(rect_frame, text="Rectangle Thickness:").pack(side=tk.LEFT)
+        ttk.Entry(rect_frame, textvariable=self.face_rect_thickness, width=8).pack(side=tk.RIGHT)
+        
+        # Landmark radius
+        landmark_frame = ttk.Frame(face_frame)
+        landmark_frame.pack(fill=tk.X, pady=5)
+        ttk.Label(landmark_frame, text="Landmark Radius:").pack(side=tk.LEFT)
+        ttk.Entry(landmark_frame, textvariable=self.landmark_radius, width=8).pack(side=tk.RIGHT)
+        
+        # Preprocessing settings section
+        preprocessing_label = ttk.Label(main_frame, text="Preprocessing Settings", font=("Arial", 10, "bold"))
+        preprocessing_label.pack(anchor=tk.W, pady=(0, 5))
+        
+        preprocessing_frame = ttk.LabelFrame(main_frame, text="Preprocessing Configuration")
+        preprocessing_frame.pack(fill=tk.X, pady=(0, 10))
+        
+        # Mode selection
+        mode_frame = ttk.Frame(preprocessing_frame)
+        mode_frame.pack(fill=tk.X, pady=5)
+        ttk.Label(mode_frame, text="Processing Mode:").pack(anchor=tk.W)
+        
+        # Radio buttons for mode selection
+        self.processing_mode = tk.StringVar(value="normal")  # normal, aligned, fullframe
+        ttk.Radiobutton(mode_frame, text="Normal (Detect+Crop+Recognize)", 
+                       variable=self.processing_mode, value="normal").pack(anchor=tk.W)
+        ttk.Radiobutton(mode_frame, text="Aligned Face (Skip Detection)", 
+                       variable=self.processing_mode, value="aligned").pack(anchor=tk.W)
+        ttk.Radiobutton(mode_frame, text="Full Frame (Experimental)", 
+                       variable=self.processing_mode, value="fullframe").pack(anchor=tk.W)
+        
+        # RGB conversion toggle
+        ttk.Checkbutton(preprocessing_frame, text="Convert to RGB", variable=self.convert_to_rgb).pack(anchor=tk.W, pady=5)
+        
+        # Target size
+        size_frame = ttk.Frame(preprocessing_frame)
+        size_frame.pack(fill=tk.X, pady=5)
+        ttk.Label(size_frame, text="Target Size:").pack(side=tk.LEFT)
+        width_frame = ttk.Frame(size_frame)
+        width_frame.pack(side=tk.RIGHT)
+        ttk.Entry(width_frame, textvariable=self.target_width, width=6).pack(side=tk.LEFT)
+        ttk.Label(width_frame, text="x").pack(side=tk.LEFT, padx=2)
+        ttk.Entry(width_frame, textvariable=self.target_height, width=6).pack(side=tk.LEFT)
         
         # Control buttons section
         control_label = ttk.Label(main_frame, text="Controls", font=("Arial", 10, "bold"))
@@ -160,14 +230,23 @@ class UIController:
                 'fps': int(self.fps.get()),
                 'processing_enabled': self.processing_enabled.get(),
                 'camera_streaming': self.camera_streaming,
-                'processing_active': self.processing_active
+                'processing_active': self.processing_active,
+                'face_margin_ratio': float(self.face_margin_ratio.get()),
+                'face_rect_thickness': int(self.face_rect_thickness.get()),
+                'landmark_radius': int(self.landmark_radius.get()),
+                'processing_mode': self.processing_mode.get(),
+                'convert_to_rgb': self.convert_to_rgb.get(),
+                'target_width': int(self.target_width.get()),
+                'target_height': int(self.target_height.get())
             }
             
             # Put config in queue for main thread to process
             self.config_queue.put(config)
             self.status_label.config(text="Settings applied")
-        except ValueError:
-            self.status_label.config(text="Invalid input values")
+        except ValueError as e:
+            self.status_label.config(text=f"Invalid input values: {str(e)}")
+        except Exception as e:
+            self.status_label.config(text=f"Error applying settings: {str(e)}")
             
     def _on_closing(self):
         """Handle window closing"""
