@@ -1,0 +1,12 @@
+name: SecureFace
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.10
+  - pip
+  - opencv
+  - numpy
+  - pip:
+    - insightface==0.7.3
+    - retinaface
