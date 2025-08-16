@@ -88,9 +88,7 @@ def add_embedding(vector, user_id):
     try:
         # Add vector to FAISS index
         # FAISS assigns an internal ID based on the order of insertion (0, 1, 2, ...)
-        # We use `next_embedding_id` to track this if needed for metadata before adding.
-        # However, FAISS index.ntotal gives the current count, which will be the ID of the next added vector.
-        faiss_id = index.ntotal # ID that FAISS will assign
+        faiss_id = int(index.ntotal) # ID that FAISS will assign - convert to Python int
         vector_float32 = vector.astype(np.float32).reshape(1, -1)
         index.add(vector_float32)
         logger.info(f"Added vector to FAISS index with ID {faiss_id}")
@@ -107,6 +105,9 @@ def add_embedding(vector, user_id):
             VALUES (%s, %s, %s);
             """
             timestamp = time.strftime('%Y-%m-%d %H:%M:%S')
+            # Convert types to ensure compatibility with PostgreSQL
+            faiss_id = int(faiss_id)
+            user_id = int(user_id)
             if db_conn.execute_update(insert_metadata_query, (faiss_id, user_id, timestamp)):
                 logger.info(f"Stored metadata for embedding ID {faiss_id}, user ID {user_id}")
                 return faiss_id
@@ -162,6 +163,9 @@ def search_embeddings(query_vector, k=5):
                 # FAISS returns -1 for indices if k is larger than the number of vectors
                 if faiss_id == -1:
                     continue 
+                    
+                # Convert numpy.int64 to regular Python int to avoid PostgreSQL adaptation issues
+                faiss_id = int(faiss_id)
                     
                 # Query metadata
                 select_metadata_query = """

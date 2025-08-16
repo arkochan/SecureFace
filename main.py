@@ -111,19 +111,30 @@ def main():
                             print(f"Warning: Could not set processing mode: {e}")
 
                     # Handle preprocessing parameters
-                    if "convert_to_rgb" in config:
+                    if 'convert_to_rgb' in config:
                         try:
-                            embedder.set_convert_to_rgb(config["convert_to_rgb"])
+                            embedder.set_convert_to_rgb(config['convert_to_rgb'])
                         except Exception as e:
                             print(f"Warning: Could not set convert to RGB: {e}")
-
-                    if "target_width" in config and "target_height" in config:
+                        
+                    if 'target_width' in config and 'target_height' in config:
                         try:
-                            embedder.set_target_size(
-                                config["target_width"], config["target_height"]
-                            )
+                            embedder.set_target_size(config['target_width'], config['target_height'])
                         except Exception as e:
                             print(f"Warning: Could not set target size: {e}")
+                    
+                    # Handle recognition parameters
+                    if 'continuous_scanning' in config:
+                        try:
+                            processor.set_continuous_scanning(config['continuous_scanning'])
+                        except Exception as e:
+                            print(f"Warning: Could not set continuous scanning: {e}")
+                    
+                    if 'recognition_threshold' in config:
+                        try:
+                            processor.set_recognition_threshold(config['recognition_threshold'])
+                        except Exception as e:
+                            print(f"Warning: Could not set recognition threshold: {e}")
 
                     # Handle frame capture request for user registration
                     if 'capture_frame' in config and config['capture_frame']:

@@ -71,6 +71,10 @@ class UIController:
         self.target_width = tk.StringVar(value="112")
         self.target_height = tk.StringVar(value="112")
         
+        # Recognition parameters
+        self.continuous_scanning = tk.BooleanVar(value=False)
+        self.recognition_threshold = tk.StringVar(value="1.0")
+        
         # Main frame
         main_frame = ttk.Frame(self.root)
         main_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
@@ -184,6 +188,22 @@ class UIController:
         ttk.Label(width_frame, text="x").pack(side=tk.LEFT, padx=2)
         ttk.Entry(width_frame, textvariable=self.target_height, width=6).pack(side=tk.LEFT)
         
+        # Recognition settings section
+        recognition_label = ttk.Label(main_frame, text="Recognition Settings", font=("Arial", 10, "bold"))
+        recognition_label.pack(anchor=tk.W, pady=(0, 5))
+        
+        recognition_frame = ttk.LabelFrame(main_frame, text="Face Recognition Configuration")
+        recognition_frame.pack(fill=tk.X, pady=(0, 10))
+        
+        # Continuous scanning toggle
+        ttk.Checkbutton(recognition_frame, text="Enable Continuous Scanning", variable=self.continuous_scanning).pack(anchor=tk.W, pady=5)
+        
+        # Recognition threshold
+        threshold_frame = ttk.Frame(recognition_frame)
+        threshold_frame.pack(fill=tk.X, pady=5)
+        ttk.Label(threshold_frame, text="Recognition Threshold:").pack(side=tk.LEFT)
+        ttk.Entry(threshold_frame, textvariable=self.recognition_threshold, width=8).pack(side=tk.RIGHT)
+        
         # Control buttons section
         control_label = ttk.Label(main_frame, text="Controls", font=("Arial", 10, "bold"))
         control_label.pack(anchor=tk.W, pady=(0, 5))
@@ -257,7 +277,9 @@ class UIController:
                 'processing_mode': self.processing_mode.get(),
                 'convert_to_rgb': self.convert_to_rgb.get(),
                 'target_width': int(self.target_width.get()),
-                'target_height': int(self.target_height.get())
+                'target_height': int(self.target_height.get()),
+                'continuous_scanning': self.continuous_scanning.get(),
+                'recognition_threshold': float(self.recognition_threshold.get())
             }
             
             # Put config in queue for main thread to process

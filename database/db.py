@@ -186,3 +186,41 @@ class SecureFaceDB:
         """
         result = self.db.execute_query(query, (user_id,))
         return result[0] if result else None
+        
+    # Embeddings metadata methods
+    def get_all_embeddings_metadata(self):
+        """Get all embeddings metadata"""
+        query = """
+        SELECT embedding_id, user_id, created_at
+        FROM embeddings_metadata
+        ORDER BY embedding_id
+        """
+        return self.db.execute_query(query)
+        
+    def get_embeddings_by_user(self, user_id):
+        """Get all embeddings for a specific user"""
+        query = """
+        SELECT embedding_id, user_id, created_at
+        FROM embeddings_metadata
+        WHERE user_id = %s
+        ORDER BY created_at DESC
+        """
+        return self.db.execute_query(query, (user_id,))
+        
+    def delete_embedding_metadata(self, embedding_id):
+        """Delete embedding metadata by embedding ID"""
+        query = """
+        DELETE FROM embeddings_metadata
+        WHERE embedding_id = %s
+        """
+        return self.db.execute_update(query, (embedding_id,))
+        
+    def get_embedding_metadata(self, embedding_id):
+        """Get metadata for a specific embedding"""
+        query = """
+        SELECT embedding_id, user_id, created_at
+        FROM embeddings_metadata
+        WHERE embedding_id = %s
+        """
+        result = self.db.execute_query(query, (embedding_id,))
+        return result[0] if result else None

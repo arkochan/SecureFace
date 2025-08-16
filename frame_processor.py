@@ -6,6 +6,7 @@ import os
 import shutil
 from retinaface import RetinaFace
 from embedder import embedder  # Import the global embedder instance
+import numpy as np
 
 class FrameProcessor:
     def __init__(self):
@@ -28,6 +29,10 @@ class FrameProcessor:
         
         # Processing parameters
         self.send_full_frame = False  # Whether to send full frame instead of cropped faces
+        self.continuous_scanning = False  # Enable continuous face scanning
+        self.recognition_threshold = 1.0  # Distance threshold for recognition (lower = stricter)
+        self.last_recognition_time = 0
+        self.recognition_cooldown = 1.0  # Minimum seconds between recognitions of the same user
         
         # Initialize RetinaFace model
         # The model will be automatically downloaded on first use
@@ -176,8 +181,53 @@ class FrameProcessor:
             embedding = embedder.get_embedding_result(timeout=0.01)
             if embedding is not None:
                 print(f"✅ Generated embedding with shape: {embedding.shape}")
+                
+                # If continuous scanning is enabled, perform face recognition
+                if self.continuous_scanning:
+                    self._recognize_face(embedding)
+                    
         except Exception as e:
             print(f"Error processing cropped face: {e}")
+
+    def _recognize_face(self, embedding):
+        """Recognize a face by comparing its embedding against the vector database"""
+        try:
+            # Import vector_db here to avoid circular imports
+            import vector_db
+            
+            # Normalize the embedding
+            normalized_embedding = embedding / np.linalg.norm(embedding)
+            
+            # Search for similar faces in the vector database
+            results = vector_db.search_embeddings(normalized_embedding, k=5)
+            
+            if results:
+                # Find the best match below the threshold
+                best_match = None
+                for faiss_id, distance, user_id, created_at in results:
+                    if distance < self.recognition_threshold:
+                        if best_match is None or distance < best_match[1]:
+                            best_match = (user_id, distance, faiss_id)
+                
+                if best_match:
+                    user_id, distance, faiss_id = best_match
+                    current_time = time.time()
+                    
+                    # Implement cooldown to avoid spamming the same recognition
+                    if current_time - self.last_recognition_time > self.recognition_cooldown:
+                        print(f"🎯 Face recognized! User ID: {user_id}, Distance: {distance:.4f}, FAISS ID: {faiss_id}")
+                        self.last_recognition_time = current_time
+                    else:
+                        print(f"🔄 Face recognized but in cooldown period - User ID: {user_id}, Distance: {distance:.4f}")
+                else:
+                    print("🔍 Face detected but no matches found below threshold")
+            else:
+                print("🔍 Face detected but vector database returned no results")
+                
+        except Exception as e:
+            print(f"Error during face recognition: {e}")
+            import traceback
+            traceback.print_exc()
 
     def set_face_rect_color(self, color):
         """Set the color of the face detection rectangle"""
@@ -203,6 +253,14 @@ class FrameProcessor:
         """Set whether to send full frame instead of cropped faces"""
         self.send_full_frame = enabled
 
+    def set_continuous_scanning(self, enabled):
+        """Set whether to enable continuous face scanning"""
+        self.continuous_scanning = enabled
+
+    def set_recognition_threshold(self, threshold):
+        """Set the recognition threshold (lower = stricter)"""
+        self.recognition_threshold = threshold
+
     def get_current_params(self):
         """Get the current face detection and cropping parameters"""
         return {
@@ -211,7 +269,9 @@ class FrameProcessor:
             'face_margin_ratio': self.face_margin_ratio,
             'landmark_radius': self.landmark_radius,
             'landmark_color': self.landmark_color,
-            'send_full_frame': self.send_full_frame
+            'send_full_frame': self.send_full_frame,
+            'continuous_scanning': self.continuous_scanning,
+            'recognition_threshold': self.recognition_threshold
         }
 
     def reset_params_to_default(self):
@@ -222,6 +282,8 @@ class FrameProcessor:
         self.landmark_radius = 2
         self.landmark_color = (0, 0, 255)  # Red landmarks
         self.landmark_thickness = -1  # Filled circle
+        self.continuous_scanning = False
+        self.recognition_threshold = 1.0
 
     def process_frame(self, frame):
         """Update the current frame to be processed"""
