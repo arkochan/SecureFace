@@ -41,3 +41,5 @@ faiss_index.bin
 *.png
 *.jpg
 *.jpeg
+
+registered_users_report.json

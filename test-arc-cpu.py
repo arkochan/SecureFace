@@ -198,7 +198,7 @@ if template_embedding is None:
 print("✅ Retrieved registered template embedding.")
 
 # --- Process images in the test_match directory for comparison ---
-test_match_dir = "test_match"
+test_match_dir = "user_images"
 if not os.path.exists(test_match_dir):
     print(f"⚠️ Test match directory '{test_match_dir}' not found.")
     sys.exit(0)  # Not an error, just no directory to compare

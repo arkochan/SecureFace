@@ -21,7 +21,7 @@ class SecureFaceDB:
         VALUES (%s, %s, %s, %s)
         RETURNING user_id
         """
-        result = self.db.execute_query(query, (full_name, role_id, department, image_path))
+        result = self.db.execute_insert_returning(query, (full_name, role_id, department, image_path))
         return result[0]['user_id'] if result else None
     
     def get_user_by_id(self, user_id):
@@ -85,7 +85,7 @@ class SecureFaceDB:
         VALUES (%s, %s, %s)
         RETURNING role_id
         """
-        result = self.db.execute_query(query, (role_name, access_level, description))
+        result = self.db.execute_insert_returning(query, (role_name, access_level, description))
         return result[0]['role_id'] if result else None
     
     def get_role_by_id(self, role_id):
@@ -142,7 +142,7 @@ class SecureFaceDB:
         VALUES (%s, %s, %s, %s)
         RETURNING log_id
         """
-        result = self.db.execute_query(query, (user_id, camera_id, recognition_result, confidence_score))
+        result = self.db.execute_insert_returning(query, (user_id, camera_id, recognition_result, confidence_score))
         return result[0]['log_id'] if result else None
     
     def get_log_by_id(self, log_id):

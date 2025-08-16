@@ -4,6 +4,9 @@ import threading
 import queue
 import cv2
 
+# Import camera detection function
+from camera_detector import detect_cameras
+
 class UIController:
     def __init__(self, config_queue):
         self.config_queue = config_queue
@@ -22,6 +25,9 @@ class UIController:
         # Control state variables
         self.camera_streaming = True
         self.processing_active = True
+        
+        # User registration window reference
+        self.registration_window = None
         
     def start(self):
         """Start the UI in a separate thread"""
@@ -43,11 +49,16 @@ class UIController:
         self.root.protocol("WM_DELETE_WINDOW", self._on_closing)
         
         # Initialize UI variables after root is created
-        self.camera_source = tk.StringVar(value="0")
+        # Detect available cameras
+        available_cameras = detect_cameras()
+        if not available_cameras:
+            available_cameras = ["0"]  # Fallback to default if no cameras detected
+        
+        self.camera_source = tk.StringVar(value=str(available_cameras[0]) if available_cameras else "0")
         self.width = tk.StringVar(value="640")
         self.height = tk.StringVar(value="480")
         self.fps = tk.StringVar(value="60")
-        self.processing_enabled = tk.BooleanVar(value=True)
+        self.processing_enabled = tk.BooleanVar(value=True)  # Keep processing enabled but paused
         
         # Face detection parameters
         self.face_margin_ratio = tk.StringVar(value="0.1")
@@ -79,9 +90,14 @@ class UIController:
         source_frame = ttk.Frame(camera_frame)
         source_frame.pack(fill=tk.X, pady=5)
         ttk.Label(source_frame, text="Camera Source:").pack(side=tk.LEFT)
-        camera_sources = ["0", "1", "2"]  # Can be extended to detect actual cameras
-        camera_combo = ttk.Combobox(source_frame, textvariable=self.camera_source, values=camera_sources, state="readonly", width=5)
-        camera_combo.pack(side=tk.RIGHT)
+        # Use detected cameras for the dropdown
+        camera_sources = [str(i) for i in detect_cameras()] or ["0"]
+        self.camera_combo = ttk.Combobox(source_frame, textvariable=self.camera_source, values=camera_sources, state="readonly", width=5)
+        self.camera_combo.pack(side=tk.LEFT, padx=(5, 0))
+        
+        # Refresh cameras button
+        refresh_btn = ttk.Button(source_frame, text="Refresh", command=self._refresh_cameras, width=8)
+        refresh_btn.pack(side=tk.RIGHT)
         
         # Resolution
         resolution_frame = ttk.Frame(camera_frame)
@@ -193,6 +209,10 @@ class UIController:
         apply_btn = ttk.Button(main_frame, text="Apply Settings", command=self._apply_settings)
         apply_btn.pack(side=tk.RIGHT, pady=(0, 5))
         
+        # Register new user button
+        register_btn = ttk.Button(main_frame, text="Register New User", command=self._open_add_user_form)
+        register_btn.pack(side=tk.RIGHT, padx=(0, 10), pady=(0, 5))
+        
         # Status label
         self.status_label = ttk.Label(main_frame, text="Ready")
         self.status_label.pack(side=tk.LEFT, pady=(0, 5))
@@ -257,3 +277,48 @@ class UIController:
         """Update status label from main thread"""
         if self.root and self.running:
             self.root.after(0, lambda: self.status_label.config(text=text))
+            
+    def set_captured_frame(self, frame):
+        """Set the captured frame for user registration"""
+        print(f"📥 UI Controller received captured frame - shape: {frame.shape}")
+        # Pass the captured frame to the registration window if it exists
+        if self.registration_window:
+            print("📤 Forwarding frame to registration window")
+            try:
+                self.registration_window.set_captured_frame(frame)
+                print("✅ Frame successfully forwarded to registration window")
+            except Exception as e:
+                error_msg = f"Failed to set captured frame: {str(e)}"
+                print(f"❌ {error_msg}")
+                import tkinter.messagebox as messagebox
+                messagebox.showerror("Error", error_msg)
+        else:
+            print("⚠️ No registration window found to receive the frame")
+            
+    def _open_add_user_form(self):
+        """Open the user registration form"""
+        # Import here to avoid circular imports
+        from user_registration import UserRegistrationWindow
+        
+        # Create and show the registration window
+        try:
+            self.registration_window = UserRegistrationWindow(self.root, self.config_queue)
+        except Exception as e:
+            import tkinter.messagebox as messagebox
+            messagebox.showerror("Error", f"Failed to open registration form: {str(e)}")
+        
+    
+        
+    def _refresh_cameras(self):
+        """Refresh the list of available cameras"""
+        # Detect available cameras
+        available_cameras = [str(i) for i in detect_cameras()] or ["0"]
+        
+        # Update the combobox values
+        self.camera_combo['values'] = available_cameras
+        
+        # If current selection is not in the new list, select the first one
+        if self.camera_source.get() not in available_cameras:
+            self.camera_source.set(available_cameras[0])
+            
+        self.status_label.config(text=f"Cameras refreshed. Available: {', '.join(available_cameras)}")
