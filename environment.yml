@@ -7,6 +7,9 @@ dependencies:
   - pip
   - opencv
   - numpy
+  - psycopg2
   - pip:
     - insightface==0.7.3
-    - retinaface
+    - python-dotenv
+    - faiss-cpu # Or faiss-gpu if you plan to use GPU
+    # Installing retinaface separately due to dependency conflicts
