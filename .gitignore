@@ -34,3 +34,10 @@ Thumbs.db
 
 cropped_images/*
 debug_images/*
+test_match/*
+
+faiss_index.bin
+*.html
+*.png
+*.jpg
+*.jpeg
