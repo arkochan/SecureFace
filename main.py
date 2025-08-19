@@ -5,7 +5,7 @@ import threading
 from stream import VideoStream
 from frame_processor import FrameProcessor
 from ui_controller import UIController
-from embedder import embedder  # Import the global embedder instance
+from embedder import FaceEmbedder
 import numpy as np
 from camera_detector import detect_cameras
 
@@ -34,7 +34,11 @@ def main():
         ui_controller.stop()
         return
 
-    processor = FrameProcessor().start()
+    # Initialize the embedder
+    embedder = FaceEmbedder()
+    
+    # Initialize the frame processor
+    processor = FrameProcessor(embedder).start()
 
     # Create windows
     cv2.namedWindow("Original Feed", cv2.WINDOW_NORMAL)
@@ -217,7 +221,7 @@ def main():
             # Only process if there's a new frame and camera streaming is enabled
             if camera_streaming and stream.has_new_frame():
                 # Get frame from stream
-                ret, frame, timestamp = stream.read()
+                ret, frame, timings = stream.read()
                 if not ret:
                     print("Failed to get frame from camera")
                     break
@@ -227,7 +231,7 @@ def main():
 
                 # Submit for processing only if processing is enabled and active
                 if processing_enabled and processing_active:
-                    processor.process_frame(frame, timestamp)
+                    processor.process_frame(frame, timings)
 
                 # Get and display processed frame if available
                 processed = processor.get_processed_frame()

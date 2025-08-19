@@ -423,4 +423,3 @@ class UIController:
         self.status_label.config(
             text=f"Cameras refreshed. Available: {', '.join(available_cameras)}"
         )
-

@@ -4,6 +4,7 @@ import insightface
 from insightface.app import FaceAnalysis
 import threading
 import queue
+import time
 
 
 class FaceEmbedder:
@@ -39,18 +40,21 @@ class FaceEmbedder:
         print("🔧 Embedding worker thread started")
         while True:
             try:
-                # Get cropped face and timestamp from queue
+                # Get cropped face and timings from queue
                 item = self.embedding_queue.get()
                 if item is None:
                     break
                 
-                cropped_face, timestamp = item
+                cropped_face, timings = item
                 
                 # Process the embedding
                 embedding = self._process_embedding(cropped_face)
                 
-                # Put result and timestamp in result queue
-                self.result_queue.put((embedding, timestamp))
+                # Add embedding end time to timings
+                timings['embedding_end_time'] = time.time()
+                
+                # Put result and timings in result queue
+                self.result_queue.put((embedding, timings))
                 
                 # Mark task as done
                 self.embedding_queue.task_done()
@@ -140,35 +144,35 @@ class FaceEmbedder:
             traceback.print_exc()
             return None
     
-    def embed(self, cropped_face, timestamp):
+    def embed(self, cropped_face, timings):
         """
         Send a cropped face for embedding processing.
         This method is thread-safe and non-blocking.
 
         Args:
             cropped_face (numpy.ndarray): Cropped face image from frame
-            timestamp (float): The timestamp of the frame
+            timings (dict): The dictionary of timings
             
         Returns:
             None: Result will be available in the result queue
         """
-        # Put the cropped face and timestamp in the queue for processing
-        self.embedding_queue.put((cropped_face, timestamp))
+        # Put the cropped face and timings in the queue for processing
+        self.embedding_queue.put((cropped_face, timings))
     
-    def embed_direct(self, image, timestamp):
+    def embed_direct(self, image, timings):
         """
         Send a full image (not necessarily a cropped face) for direct embedding processing.
         This method is thread-safe and non-blocking.
 
         Args:
             image (numpy.ndarray): Full image frame
-            timestamp (float): The timestamp of the frame
+            timings (dict): The dictionary of timings
 
         Returns:
             None: Result will be available in the result queue
         """
-        # Put the full image and timestamp in the queue for processing
-        self.embedding_queue.put((image, timestamp))
+        # Put the full image and timings in the queue for processing
+        self.embedding_queue.put((image, timings))
 
     def set_convert_to_rgb(self, enabled):
         """Enable or disable RGB conversion"""
@@ -198,7 +202,7 @@ class FaceEmbedder:
             timeout (float, optional): Timeout in seconds to wait for result
             
         Returns:
-            (numpy.ndarray or None, float or None): The face embedding and timestamp, or (None, None) if error/timeout
+            (numpy.ndarray or None, dict or None): The face embedding and timings, or (None, None) if error/timeout
         """
         try:
             return self.result_queue.get(timeout=timeout)
@@ -213,7 +217,7 @@ class FaceEmbedder:
             timeout (float): Timeout in seconds for each result retrieval
             
         Returns:
-            list: List of (face embedding, timestamp) tuples
+            list: List of (face embedding, timings) tuples
         """
         results = []
         try:
@@ -229,7 +233,3 @@ class FaceEmbedder:
         self.embedding_queue.put(None)  # Signal to stop
         if self.embedding_thread.is_alive():
             self.embedding_thread.join()
-
-
-# Global instance for easy access
-embedder = FaceEmbedder()
