@@ -50,7 +50,7 @@ class VideoStream:
             raise RuntimeError("Failed to read initial frame")
         
         with self.lock:
-            self.frame = frame
+            self.frame = (frame, time.time())
             self.new_frame = True
             
         threading.Thread(target=self._update, daemon=True).start()
@@ -62,7 +62,7 @@ class VideoStream:
             if not ret:
                 break
             with self.lock:
-                self.frame = frame
+                self.frame = (frame, time.time())
                 self.new_frame = True
                 self.frame_count += 1
 
@@ -70,8 +70,8 @@ class VideoStream:
         with self.lock:
             if self.frame is not None:
                 self.new_frame = False
-                return True, self.frame
-            return False, None
+                return True, self.frame[0], self.frame[1]
+            return False, None, None
             
     def has_new_frame(self):
         with self.lock:

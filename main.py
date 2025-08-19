@@ -142,7 +142,7 @@ def main():
                         print(f"📊 Camera state - streaming: {camera_streaming}, has_new_frame: {stream.has_new_frame()}")
                         if camera_streaming and stream.has_new_frame():
                             print("📥 Attempting to read frame from camera stream")
-                            ret, frame = stream.read()
+                            ret, frame, _ = stream.read()
                             if ret:
                                 print(f"✅ Frame captured successfully - shape: {frame.shape}")
                                 # Send frame to UI controller for user registration
@@ -155,7 +155,7 @@ def main():
                             # Try to read a frame even if camera is marked as paused
                             # This can happen if the pause is temporary or UI state is out of sync
                             print("📥 Attempting to read frame from camera stream (paused state)")
-                            ret, frame = stream.read()
+                            ret, frame, _ = stream.read()
                             if ret:
                                 print(f"✅ Frame captured successfully (forced) - shape: {frame.shape}")
                                 # Send frame to UI controller for user registration
@@ -170,7 +170,7 @@ def main():
                             while time.time() - frame_wait_start < 0.5:  # Wait up to 500ms
                                 if stream.has_new_frame():
                                     print("📥 New frame detected, attempting to read")
-                                    ret, frame = stream.read()
+                                    ret, frame, _ = stream.read()
                                     if ret:
                                         print(f"✅ Frame captured successfully (after wait) - shape: {frame.shape}")
                                         # Send frame to UI controller for user registration
@@ -217,7 +217,7 @@ def main():
             # Only process if there's a new frame and camera streaming is enabled
             if camera_streaming and stream.has_new_frame():
                 # Get frame from stream
-                ret, frame = stream.read()
+                ret, frame, timestamp = stream.read()
                 if not ret:
                     print("Failed to get frame from camera")
                     break
@@ -227,7 +227,7 @@ def main():
 
                 # Submit for processing only if processing is enabled and active
                 if processing_enabled and processing_active:
-                    processor.process_frame(frame)
+                    processor.process_frame(frame, timestamp)
 
                 # Get and display processed frame if available
                 processed = processor.get_processed_frame()

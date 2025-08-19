@@ -71,23 +71,23 @@ class FrameProcessor:
 
             try:
                 # Wait for a frame with timeout
-                frame = self.frame_queue.get(timeout=0.01)
+                frame, timestamp = self.frame_queue.get(timeout=0.01)
             except queue.Empty:
                 continue
 
             # Process the frame with RetinaFace face detection
-            processed = self._detect_faces(frame)
+            processed = self._detect_faces(frame, timestamp)
 
             with self.lock:
                 self.processed_frame = processed
                 self.frame_count += 1
 
-    def _detect_faces(self, frame):
+    def _detect_faces(self, frame, timestamp):
         """Detect faces using RetinaFace, draw green rectangles around them, and process cropped faces with embedder"""
         try:
             # If send_full_frame is enabled, send the entire frame to the embedder
             if self.send_full_frame:
-                embedder.embed_direct(frame)
+                embedder.embed_direct(frame, timestamp)
                 # Create a copy of the frame to draw on
                 annotated_frame = frame.copy()
                 # Add text indicating full frame mode
@@ -130,7 +130,7 @@ class FrameProcessor:
                                       self.landmark_color, self.landmark_thickness)
                     
                     # Crop and process the face with embedder
-                    self._process_cropped_face(frame, x1, y1, x2, y2)
+                    self._process_cropped_face(frame, x1, y1, x2, y2, timestamp)
             
             # Add face count text
             cv2.putText(annotated_frame, f"Faces detected: {face_count}", (10, 30), 
@@ -150,7 +150,7 @@ class FrameProcessor:
             # Return original frame resized to standard size
             return cv2.resize(frame, (640, 480))
 
-    def _process_cropped_face(self, frame, x1, y1, x2, y2):
+    def _process_cropped_face(self, frame, x1, y1, x2, y2, timestamp):
         """Process a cropped face image with the embedder"""
         try:
             # Add margin around the face using configurable parameter
@@ -174,22 +174,22 @@ class FrameProcessor:
                 return
                 
             # Send the cropped face to the embedder for processing
-            embedder.embed(cropped_face)
+            embedder.embed(cropped_face, timestamp)
             self.saved_face_count += 1
             
             # Get the embedding result (non-blocking)
-            embedding = embedder.get_embedding_result(timeout=0.01)
+            embedding, timestamp = embedder.get_embedding_result(timeout=0.01)
             if embedding is not None:
                 print(f"✅ Generated embedding with shape: {embedding.shape}")
                 
                 # If continuous scanning is enabled, perform face recognition
                 if self.continuous_scanning:
-                    self._recognize_face(embedding)
+                    self._recognize_face(embedding, timestamp)
                     
         except Exception as e:
             print(f"Error processing cropped face: {e}")
 
-    def _recognize_face(self, embedding):
+    def _recognize_face(self, embedding, timestamp):
         """Recognize a face by comparing its embedding against the vector database"""
         try:
             # Import vector_db here to avoid circular imports
@@ -215,7 +215,8 @@ class FrameProcessor:
                     
                     # Implement cooldown to avoid spamming the same recognition
                     if current_time - self.last_recognition_time > self.recognition_cooldown:
-                        print(f"🎯 Face recognized! User ID: {user_id}, Distance: {distance:.4f}, FAISS ID: {faiss_id}")
+                        latency = (time.time() - timestamp) * 1000
+                        print(f"🎯 Face recognized! User ID: {user_id}, Distance: {distance:.4f}, FAISS ID: {faiss_id}, Latency: {latency:.2f} ms")
                         self.last_recognition_time = current_time
                     else:
                         print(f"🔄 Face recognized but in cooldown period - User ID: {user_id}, Distance: {distance:.4f}")
@@ -285,7 +286,7 @@ class FrameProcessor:
         self.continuous_scanning = False
         self.recognition_threshold = 1.0
 
-    def process_frame(self, frame):
+    def process_frame(self, frame, timestamp):
         """Update the current frame to be processed"""
         if not self.processing_enabled:
             return
@@ -298,7 +299,7 @@ class FrameProcessor:
             
         # Add the new frame
         try:
-            self.frame_queue.put_nowait(frame)
+            self.frame_queue.put_nowait((frame, timestamp))
         except queue.Full:
             pass
 

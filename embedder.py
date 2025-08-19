@@ -39,22 +39,24 @@ class FaceEmbedder:
         print("🔧 Embedding worker thread started")
         while True:
             try:
-                # Get cropped face from queue
-                cropped_face = self.embedding_queue.get()
-                if cropped_face is None:
+                # Get cropped face and timestamp from queue
+                item = self.embedding_queue.get()
+                if item is None:
                     break
+                
+                cropped_face, timestamp = item
                 
                 # Process the embedding
                 embedding = self._process_embedding(cropped_face)
                 
-                # Put result in result queue
-                self.result_queue.put(embedding)
+                # Put result and timestamp in result queue
+                self.result_queue.put((embedding, timestamp))
                 
                 # Mark task as done
                 self.embedding_queue.task_done()
             except Exception as e:
                 print(f"❌ Error in embedding worker: {e}")
-                self.result_queue.put(None)
+                self.result_queue.put((None, None))
     
     def _process_embedding(self, cropped_face):
         """Process a single cropped face to generate embedding using ArcFace"""
@@ -138,33 +140,35 @@ class FaceEmbedder:
             traceback.print_exc()
             return None
     
-    def embed(self, cropped_face):
+    def embed(self, cropped_face, timestamp):
         """
         Send a cropped face for embedding processing.
         This method is thread-safe and non-blocking.
 
         Args:
             cropped_face (numpy.ndarray): Cropped face image from frame
+            timestamp (float): The timestamp of the frame
             
         Returns:
             None: Result will be available in the result queue
         """
-        # Put the cropped face in the queue for processing
-        self.embedding_queue.put(cropped_face)
+        # Put the cropped face and timestamp in the queue for processing
+        self.embedding_queue.put((cropped_face, timestamp))
     
-    def embed_direct(self, image):
+    def embed_direct(self, image, timestamp):
         """
         Send a full image (not necessarily a cropped face) for direct embedding processing.
         This method is thread-safe and non-blocking.
 
         Args:
             image (numpy.ndarray): Full image frame
+            timestamp (float): The timestamp of the frame
 
         Returns:
             None: Result will be available in the result queue
         """
-        # Put the full image in the queue for processing
-        self.embedding_queue.put(image)
+        # Put the full image and timestamp in the queue for processing
+        self.embedding_queue.put((image, timestamp))
 
     def set_convert_to_rgb(self, enabled):
         """Enable or disable RGB conversion"""
@@ -194,12 +198,12 @@ class FaceEmbedder:
             timeout (float, optional): Timeout in seconds to wait for result
             
         Returns:
-            numpy.ndarray or None: The face embedding or None if error/timeout
+            (numpy.ndarray or None, float or None): The face embedding and timestamp, or (None, None) if error/timeout
         """
         try:
             return self.result_queue.get(timeout=timeout)
         except queue.Empty:
-            return None
+            return None, None
     
     def get_all_embedding_results(self, timeout=0.1):
         """
@@ -209,7 +213,7 @@ class FaceEmbedder:
             timeout (float): Timeout in seconds for each result retrieval
             
         Returns:
-            list: List of face embeddings (may contain None for failed embeddings)
+            list: List of (face embedding, timestamp) tuples
         """
         results = []
         try:
