@@ -5,6 +5,8 @@ import os
 from datetime import datetime
 from database.db import SecureFaceDB
 import vector_db
+import base64
+import cv2
 
 # Initialize FAISS index to get proper stats
 vector_db.init_index(dim=512, index_path="faiss_index.bin")
@@ -136,10 +138,29 @@ def generate_simple_html(report_data):
         html += "    <p>No users registered.</p>\n"
     else:
         html += "    <table border='1' cellpadding='5' cellspacing='0'>\n"
-        html += "        <tr><th>User ID</th><th>Name</th><th>Department</th><th>Role</th><th>Registered</th></tr>\n"
+        html += "        <tr><th>Image</th><th>User ID</th><th>Name</th><th>Department</th><th>Role</th><th>Registered</th></tr>\n"
         
         for user in report_data["users"]:
+            image_html = "No Image"
+            if user['image_path'] and os.path.exists(user['image_path']):
+                try:
+                    img = cv2.imread(user['image_path'])
+                    # Resize image to a standard height
+                    height = 100
+                    aspect_ratio = img.shape[1] / img.shape[0]
+                    width = int(height * aspect_ratio)
+                    resized_img = cv2.resize(img, (width, height))
+                    
+                    # Encode image to base64
+                    _, buffer = cv2.imencode('.jpg', resized_img)
+                    img_base64 = base64.b64encode(buffer).decode('utf-8')
+                    image_html = f'<img src="data:image/jpeg;base64,{img_base64}" alt="User Image">'
+                except Exception as e:
+                    print(f"Error processing image {user['image_path']}: {e}")
+                    image_html = "Error loading image"
+
             html += "        <tr>\n"
+            html += f"            <td>{image_html}</td>\n"
             html += f"            <td>{user['user_id']}</td>\n"
             html += f"            <td>{user['full_name']}</td>\n"
             html += f"            <td>{user['department'] or 'N/A'}</td>\n"

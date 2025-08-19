@@ -12,4 +12,5 @@ dependencies:
     - insightface==0.7.3
     - python-dotenv
     - faiss-cpu # Or faiss-gpu if you plan to use GPU
+    - Faker
     # Installing retinaface separately due to dependency conflicts
