@@ -108,6 +108,36 @@ def handle_recognition_params(config, processor):
             print(f"Warning: Could not set recognition threshold: {e}")
 
 
+def handle_detector_type(config, processor, embedder, current_detector_type):
+    """Handle detector type changes - requires reinitializing the processor"""
+    if 'detector_type' in config and config['detector_type'] != current_detector_type:
+        new_detector_type = config['detector_type']
+        print(f"🔄 Changing face detector from {current_detector_type} to {new_detector_type}")
+        
+        # Stop the current processor
+        processor.stop()
+        
+        # Reinitialize the processor with the new detector type
+        new_processor = FrameProcessor(embedder, new_detector_type).start()
+        
+        # Copy over the current settings to the new processor
+        # Get current parameters from the old processor
+        current_params = processor.get_current_params()
+        
+        # Apply parameters to the new processor
+        new_processor.set_face_margin_ratio(current_params['face_margin_ratio'])
+        new_processor.set_face_rect_thickness(current_params['face_rect_thickness'])
+        new_processor.set_landmark_radius(current_params['landmark_radius'])
+        new_processor.set_send_full_frame(processor.send_full_frame)
+        new_processor.set_continuous_scanning(processor.continuous_scanning)
+        new_processor.set_recognition_threshold(processor.recognition_threshold)
+        
+        print(f"✅ Face detector changed to {new_detector_type}")
+        return new_processor, new_detector_type
+    
+    return processor, current_detector_type
+
+
 def handle_frame_capture(config, stream, ui_controller, camera_streaming):
     """Handle frame capture request for user registration"""
     if 'capture_frame' in config and config['capture_frame']:
@@ -310,7 +340,9 @@ def main():
     embedder = FaceEmbedder()
     
     # Initialize the frame processor
-    processor = FrameProcessor(embedder).start()
+    # Default to RetinaFace for backward compatibility
+    detector_type = "retinaface"  # Could be "retinaface" or "insightface"
+    processor = FrameProcessor(embedder, detector_type).start()
 
     # Create windows
     cv2.namedWindow("Original Feed", cv2.WINDOW_NORMAL)
@@ -328,6 +360,9 @@ def main():
             if time.time() - last_config_check >= 0.1:
                 try:
                     config = config_queue.get_nowait()
+                    
+                    # Handle detector type changes first (may require processor reinitialization)
+                    processor, detector_type = handle_detector_type(config, processor, embedder, detector_type)
                     
                     # Handle system controls
                     processing_enabled, camera_streaming, processing_active = handle_system_controls(

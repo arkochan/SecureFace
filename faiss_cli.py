@@ -118,26 +118,26 @@ def remove_user_embeddings(user_id):
     print("=" * 45)
     
     try:
-        # Get all embeddings for this user
+        # Get all embeddings for this user and remove them
+        removed_count = 0
         with SecureFaceDB() as db:
             user_embeddings = db.get_embeddings_by_user(user_id)
             
-        if not user_embeddings:
-            print(f"📭 No embeddings found for user {user_id}")
-            return
+            if not user_embeddings:
+                print(f"📭 No embeddings found for user {user_id}")
+                return
+                
+            print(f"Found {len(user_embeddings)} embedding(s) for user {user_id}")
             
-        print(f"Found {len(user_embeddings)} embedding(s) for user {user_id}")
-        
-        # Remove metadata for each embedding
-        removed_count = 0
-        for embedding in user_embeddings:
-            faiss_id = embedding['embedding_id']
-            result = db.delete_embedding_metadata(faiss_id)
-            if result:
-                removed_count += 1
-                print(f"✅ Removed metadata for embedding {faiss_id}")
-            else:
-                print(f"❌ Failed to remove metadata for embedding {faiss_id}")
+            # Remove metadata for each embedding
+            for embedding in user_embeddings:
+                faiss_id = embedding['embedding_id']
+                result = db.delete_embedding_metadata(faiss_id)
+                if result:
+                    removed_count += 1
+                    print(f"✅ Removed metadata for embedding {faiss_id}")
+                else:
+                    print(f"❌ Failed to remove metadata for embedding {faiss_id}")
                 
         print(f"\n📊 Summary: {removed_count}/{len(user_embeddings)} embeddings removed from database")
         print("💡 Note: FAISS index still contains the vectors. To fully remove them, rebuild the index.")

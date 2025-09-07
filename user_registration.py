@@ -8,7 +8,7 @@ import time
 import psycopg2
 from database.connection import DatabaseConnection
 import numpy as np
-from embedder import embedder
+from embedder import FaceEmbedder
 import vector_db
 
 
@@ -299,17 +299,23 @@ class UserRegistrationWindow:
             img_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             print(f"✅ Color conversion completed - image shape: {img_rgb.shape}")
 
-            # Get embedding using the global embedder
+            # Create a temporary embedder instance for generating the embedding
+            print("🔧 Creating temporary FaceEmbedder instance")
+            temp_embedder = FaceEmbedder()
             print("🔍 Detecting faces and generating embedding using InsightFace")
-            faces = embedder.app.get(img_rgb)
+            faces = temp_embedder.app.get(img_rgb)
             print(f"👤 Face detection completed - found {len(faces)} face(s)")
 
             if len(faces) > 0:
                 embedding = faces[0].embedding
                 print(f"✅ Embedding generated successfully - shape: {embedding.shape}")
+                # Clean up the temporary embedder
+                temp_embedder.stop()
                 return embedding
             else:
                 print("⚠️ No faces detected in the image")
+                # Clean up the temporary embedder
+                temp_embedder.stop()
                 return None
         except Exception as e:
             error_msg = f"Error generating embedding: {e}"

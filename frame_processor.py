@@ -4,13 +4,13 @@ import time
 import queue
 import os
 import shutil
-from retinaface import RetinaFace
 from embedder import FaceEmbedder
 import numpy as np
+from face_detector import FaceDetectorFactory
 
 
 class FrameProcessor:
-    def __init__(self, embedder):
+    def __init__(self, embedder, detector_type="retinaface"):
         self.embedder = embedder
         self.processed_frame = None
         self.stopped = False
@@ -42,14 +42,10 @@ class FrameProcessor:
             1.0  # Minimum seconds between recognitions of the same user
         )
 
-        # Initialize RetinaFace model
-        # The model will be automatically downloaded on first use
-        print("Initializing RetinaFace model...")
-        # Run a dummy detection to trigger model download
-        dummy_frame = cv2.imread("/dev/null", cv2.IMREAD_COLOR)
-        if dummy_frame is None:
-            dummy_frame = cv2.imread("/tmp/nonexistent.jpg", cv2.IMREAD_COLOR)
-        print("RetinaFace model initialized.")
+        # Initialize face detector
+        print(f"Initializing {detector_type} face detector...")
+        self.face_detector = FaceDetectorFactory.create_detector(detector_type)
+        print(f"{detector_type.capitalize()} face detector initialized.")
 
     def start(self):
         self.stopped = False
@@ -91,7 +87,7 @@ class FrameProcessor:
                 self.frame_count += 1
 
     def _detect_faces(self, frame, timings):
-        """Detect faces using RetinaFace, draw green rectangles around them, and process cropped faces with embedder"""
+        """Detect faces using the selected face detector, draw rectangles around them, and process cropped faces with embedder"""
         try:
             # If send_full_frame is enabled, send the entire frame to the embedder
             if self.send_full_frame:
@@ -125,42 +121,32 @@ class FrameProcessor:
 
             # Run face detection
             timings["detection_start_time"] = time.time()
-            # Note: RetinaFace expects RGB format, but OpenCV uses BGR
-            rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            faces = RetinaFace.detect_faces(rgb_frame)
+            faces = self.face_detector.detect_faces(frame)
             timings["detection_end_time"] = time.time()
 
             # Draw rectangles around all detected faces and process cropped faces
-            face_count = 0
-            if isinstance(faces, dict):
-                for face_key, face_data in faces.items():
-                    # Get bounding box coordinates
-                    x1, y1, x2, y2 = map(int, face_data["facial_area"])
+            face_count = len(faces)
+            
+            # Draw faces using the detector's drawing method
+            annotated_frame = self.face_detector.draw_faces(
+                annotated_frame, 
+                faces,
+                rect_color=self.face_rect_color,
+                rect_thickness=self.face_rect_thickness,
+                landmark_radius=self.landmark_radius,
+                landmark_color=self.landmark_color,
+                landmark_thickness=self.landmark_thickness
+            )
 
-                    # Draw rectangle around the face with configurable parameters
-                    cv2.rectangle(
-                        annotated_frame,
-                        (x1, y1),
-                        (x2, y2),
-                        self.face_rect_color,
-                        self.face_rect_thickness,
-                    )
-                    face_count += 1
-
-                    # Draw facial landmarks if available with configurable parameters
-                    if "landmarks" in face_data:
-                        for landmark_key, landmark in face_data["landmarks"].items():
-                            lx, ly = map(int, landmark)
-                            cv2.circle(
-                                annotated_frame,
-                                (lx, ly),
-                                self.landmark_radius,
-                                self.landmark_color,
-                                self.landmark_thickness,
-                            )
-
-                    # Crop and process the face with embedder
-                    self._process_cropped_face(frame, x1, y1, x2, y2, timings)
+            # Process each detected face
+            for face in faces:
+                if hasattr(face, 'bbox'):  # InsightFace format
+                    x1, y1, x2, y2 = map(int, face.bbox)
+                else:  # RetinaFace format
+                    x1, y1, x2, y2 = map(int, face['bbox'])
+                    
+                # Crop and process the face with embedder
+                self._process_cropped_face(frame, x1, y1, x2, y2, timings)
 
             # Add face count text
             cv2.putText(

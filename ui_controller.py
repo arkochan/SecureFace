@@ -224,6 +224,34 @@ class UIController:
             value="fullframe",
         ).pack(anchor=tk.W)
 
+        # Detector selection
+        detector_frame = ttk.Frame(preprocessing_frame)
+        detector_frame.pack(fill=tk.X, pady=5)
+        ttk.Label(detector_frame, text="Face Detector:").pack(anchor=tk.W)
+
+        # Radio buttons for detector selection
+        self.detector_type = tk.StringVar(
+            value="retinaface"
+        )  # retinaface, insightface, or scrfd
+        ttk.Radiobutton(
+            detector_frame,
+            text="RetinaFace",
+            variable=self.detector_type,
+            value="retinaface",
+        ).pack(anchor=tk.W)
+        ttk.Radiobutton(
+            detector_frame,
+            text="InsightFace",
+            variable=self.detector_type,
+            value="insightface",
+        ).pack(anchor=tk.W)
+        ttk.Radiobutton(
+            detector_frame,
+            text="SCRFD",
+            variable=self.detector_type,
+            value="scrfd",
+        ).pack(anchor=tk.W)
+
         # RGB conversion toggle
         ttk.Checkbutton(
             preprocessing_frame, text="Convert to RGB", variable=self.convert_to_rgb
@@ -350,6 +378,7 @@ class UIController:
                 "face_rect_thickness": int(self.face_rect_thickness.get()),
                 "landmark_radius": int(self.landmark_radius.get()),
                 "processing_mode": self.processing_mode.get(),
+                "detector_type": self.detector_type.get(),
                 "convert_to_rgb": self.convert_to_rgb.get(),
                 "target_width": int(self.target_width.get()),
                 "target_height": int(self.target_height.get()),
